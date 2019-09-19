@@ -3,7 +3,7 @@ library(rvest)
 
 base_url <- "https://letterboxd.com"
 
-popular_usernames <- read_csv("popular_user_names.csv") %>%
+usernames <- read_csv("data/username_set.csv") %>%
   pull(username)
 
 
@@ -15,6 +15,12 @@ GrabHtml <- function(url) {
                                                              ". Error was: ", 
                                                              e))
                             return(e)})
+  if ("error" %in% class(html_output)) {
+    if (str_detect(html_output$message, "503")) {
+      Sys.sleep(10)
+      html_output <- GrabHtml(url)
+    }
+  }
   return(html_output)
 }
 
@@ -90,8 +96,8 @@ GrabUserMoviePage <- function(user_html) {
 
 CompileManyUsers <- function(usernames) {
 # If the file "all_user_reviews.csv" exists, we start by appending to it
-  if("all_user_reviews.csv" %in% list.files()) {
-    all_user_reviews <- read_csv("all_user_reviews.csv") %>%
+  if("all_user_reviews.csv" %in% list.files("data/")) {
+    all_user_reviews <- read_csv("data/all_user_reviews.csv") %>%
       mutate(user_rating = as.character(user_rating),
                film_id = as.character(film_id))
 # We also remove all elements from usernames that exist in our data
@@ -99,6 +105,9 @@ CompileManyUsers <- function(usernames) {
             all_user_reviews %>% 
               pull(username) %>%
               unique())
+    if (length(usernames) == 0) {
+      return(all_user_reviews)
+    }
   } else {
     all_user_reviews <- NULL
   }
@@ -107,7 +116,7 @@ CompileManyUsers <- function(usernames) {
 # We save our progress every 5 users
     if(i %% 5 == 0) {
       print(paste0("On user: ", i))
-      all_user_reviews %>% write_csv("all_user_reviews.csv")
+      all_user_reviews %>% write_csv("data/all_user_reviews.csv")
     }
     all_user_reviews <- all_user_reviews %>%
       bind_rows(usernames[i] %>% GrabAllUserMovies(max_num_movies = 100))
@@ -115,5 +124,7 @@ CompileManyUsers <- function(usernames) {
   return(all_user_reviews)
 }
 
-temp_movies <- CompileManyUsers(popular_usernames[1:4])
-temp_movies %>% write_csv("all_user_reviews.csv")
+all_movies <- CompileManyUsers(usernames[1:9])
+all_movies %>% write_csv("data/all_user_reviews.csv")
+
+temp <- GrabHtml("https://letterboxd.com/bratpitt/films/page/abc")
